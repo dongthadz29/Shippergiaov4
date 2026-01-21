@@ -14,7 +14,7 @@ header{
   justify-content:space-between;
   align-items:center;
   padding:0 10px;
-  z-index:1000;
+  z-index:2000;
 }
 
 #map{margin-top:44px;}
@@ -27,7 +27,7 @@ header{
   border-radius:16px;
   padding:10px;
   width:95%;
-  z-index:900;
+  z-index:1500;
 }
 
 .panel.top{top:54px;}
@@ -51,7 +51,7 @@ header{
   padding:8px 14px;
   border-radius:14px;
   font-weight:600;
-  z-index:1200;
+  z-index:3000;
   display:none;
 }
 
@@ -64,7 +64,7 @@ header{
   color:#fff;
   padding:6px 12px;
   border-radius:20px;
-  z-index:1200;
+  z-index:3000;
 }
 
 .me-arrow{

@@ -5,29 +5,39 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Shipper Map</title>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="style.css">
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 
 <body>
 
 <header>
   🚚 Shipper Map
-  <button id="btnMyPos">📍</button>
+  <button id="btnCenter">📍</button>
 </header>
 
 <div id="map"></div>
 
-<!-- LƯU ĐỊA ĐIỂM -->
+<!-- PANEL TRÊN: LƯU -->
 <div class="panel top">
   <input id="customer" placeholder="Tên khách">
   <input id="phone" placeholder="SĐT">
-  <input id="coord" placeholder="Toạ độ (click bản đồ)" readonly>
-  <button onclick="saveLocation()">💾 Lưu địa điểm</button>
+  <input id="coord" placeholder="Toạ độ (chạm bản đồ)" readonly>
+
+  <button id="btnSave">💾 Lưu địa điểm</button>
+
+  <div class="row">
+    <button id="btnExport">⬇️ Xuất</button>
+    <label class="import-btn">
+      ⬆️ Nhập
+      <input type="file" id="importFile" hidden>
+    </label>
+  </div>
 </div>
 
-<!-- DANH SÁCH -->
+<!-- PANEL DƯỚI: DANH SÁCH -->
 <div class="panel bottom">
   <div id="list"></div>
 </div>
@@ -39,8 +49,8 @@
 
 <script>
 /* ================= MAP ================= */
-const map = L.map('map',{zoomControl:false}).setView([21.03,105.85],16);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+const map = L.map('map',{zoomControl:true}).setView([10.7769,106.7009],15);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20}).addTo(map);
 
 /* ================= ICON ================= */
 const meIcon = L.divIcon({
@@ -50,54 +60,50 @@ const meIcon = L.divIcon({
   iconAnchor:[15,15]
 });
 
-/* ================= GPS ================= */
-let myLatLng=null;
-let myMarker=null;
-let activeTarget=null;
-let activeCustomer=null;
+/* ================= STATE ================= */
+let myLatLng = null;
+let myMarker = null;
+let tempLatLng = null;
+let activeTarget = null;
+let activeCustomer = null;
 
-navigator.geolocation.watchPosition(p=>{
-  myLatLng=[p.coords.latitude,p.coords.longitude];
-  if(!myMarker){
-    myMarker=L.marker(myLatLng,{icon:meIcon}).addTo(map);
-  }else{
-    myMarker.setLatLng(myLatLng);
-  }
-  if(activeTarget) updateDistance();
-},{enableHighAccuracy:true});
+/* ================= GPS FIX (KHÔNG TRÔI) ================= */
+navigator.geolocation.watchPosition(
+  pos=>{
+    const lat = pos.coords.latitude;
+    const lng = pos.coords.longitude;
 
-document.getElementById('btnMyPos').onclick=()=>{
+    if(!myLatLng){
+      myLatLng=[lat,lng];
+      map.setView(myLatLng,17);
+      myMarker = L.marker(myLatLng,{icon:meIcon}).addTo(map);
+    }else{
+      myLatLng=[lat,lng];
+      myMarker.setLatLng(myLatLng);
+    }
+
+    if(activeTarget) updateDistance();
+  },
+  err=>alert("Không lấy được GPS"),
+  { enableHighAccuracy:true, maximumAge:2000, timeout:10000 }
+);
+
+btnCenter.onclick=()=>{
   if(myLatLng) map.setView(myLatLng,18);
 };
 
-/* ================= CLICK MAP ================= */
-let tempLatLng=null;
+/* ================= CLICK MAP FIX ================= */
 map.on('click',e=>{
-  tempLatLng=e.latlng;
-  coord.value=`${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}`;
+  tempLatLng = e.latlng;
+  coord.value = `${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}`;
 });
 
 /* ================= DATA ================= */
-let locations=JSON.parse(localStorage.getItem('locations')||'[]');
+let locations = JSON.parse(localStorage.getItem('locations') || '[]');
 let markers=[];
 
-function save(){
+function saveStorage(){
   localStorage.setItem('locations',JSON.stringify(locations));
-  render();
-}
-
-function saveLocation(){
-  if(!tempLatLng) return alert("Chạm bản đồ để lấy toạ độ");
-  locations.push({
-    id:Date.now(),
-    customer:customer.value,
-    phone:phone.value,
-    lat:tempLatLng.lat,
-    lng:tempLatLng.lng
-  });
-  tempLatLng=null;
-  coord.value='';
-  save();
 }
 
 function render(){
@@ -105,9 +111,11 @@ function render(){
   markers=[];
 
   list.innerHTML='';
+
   locations.forEach((l,i)=>{
-    const m=L.marker([l.lat,l.lng]).addTo(map)
-      .bindTooltip(`${l.customer}<br>${l.phone}`);
+    const m=L.marker([l.lat,l.lng])
+      .addTo(map)
+      .bindTooltip(`${l.customer}<br>${l.phone}`,{permanent:false});
     markers.push(m);
 
     const d=document.createElement('div');
@@ -124,11 +132,23 @@ function render(){
 }
 render();
 
-function del(i){
-  locations.splice(i,1);
-  save();
-}
+/* ================= SAVE FIX ================= */
+btnSave.onclick=()=>{
+  if(!tempLatLng) return alert("Chạm bản đồ để lấy toạ độ");
+  locations.push({
+    id:Date.now(),
+    customer:customer.value,
+    phone:phone.value,
+    lat:tempLatLng.lat,
+    lng:tempLatLng.lng
+  });
+  tempLatLng=null;
+  coord.value='';
+  saveStorage();
+  render();
+};
 
+/* ================= GO ================= */
 function goTo(i){
   const l=locations[i];
   activeTarget=[l.lat,l.lng];
@@ -137,11 +157,19 @@ function goTo(i){
   map.setView(activeTarget,17);
 }
 
-/* ================= DISTANCE ================= */
+/* ================= DELETE ================= */
+function del(i){
+  locations.splice(i,1);
+  saveStorage();
+  render();
+}
+
+/* ================= DISTANCE + ARRIVAL ================= */
 function updateDistance(){
-  if(!activeTarget||!myLatLng) return;
+  if(!myLatLng||!activeTarget) return;
   const d=map.distance(myLatLng,activeTarget);
-  distanceBox.innerText=d<1000?`${Math.round(d)} m`:`${(d/1000).toFixed(2)} km`;
+  distanceBox.innerText = d<1000 ? `Còn ${Math.round(d)} m` : `Còn ${(d/1000).toFixed(2)} km`;
+  distanceBox.style.display='block';
 
   if(d<15){
     alert(`🎯 Đã đến nơi\n${activeCustomer.customer}\n${activeCustomer.phone}`);
@@ -149,6 +177,31 @@ function updateDistance(){
     navBox.style.display='none';
   }
 }
+
+/* ================= EXPORT / IMPORT ================= */
+btnExport.onclick=()=>{
+  const blob=new Blob([JSON.stringify(locations)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='shipper-map.json';
+  a.click();
+};
+
+importFile.onchange=e=>{
+  const f=e.target.files[0];
+  if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      locations=JSON.parse(r.result);
+      saveStorage();
+      render();
+    }catch{
+      alert("File không hợp lệ");
+    }
+  };
+  r.readAsText(f);
+};
 </script>
 
 </body>
