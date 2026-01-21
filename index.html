@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Shipper Map</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+<link rel="stylesheet" href="style.css">
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+</head>
+
+<body>
+
+<header>
+  🚚 Shipper Map
+  <button id="btnMyPos">📍</button>
+</header>
+
+<div id="map"></div>
+
+<!-- LƯU ĐỊA ĐIỂM -->
+<div class="panel top">
+  <input id="customer" placeholder="Tên khách">
+  <input id="phone" placeholder="SĐT">
+  <input id="coord" placeholder="Toạ độ (click bản đồ)" readonly>
+  <button onclick="saveLocation()">💾 Lưu địa điểm</button>
+</div>
+
+<!-- DANH SÁCH -->
+<div class="panel bottom">
+  <div id="list"></div>
+</div>
+
+<div id="navBox"></div>
+<div id="distanceBox"></div>
+
+<script src="osrm.js"></script>
+
+<script>
+/* ================= MAP ================= */
+const map = L.map('map',{zoomControl:false}).setView([21.03,105.85],16);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+
+/* ================= ICON ================= */
+const meIcon = L.divIcon({
+  className:'me',
+  html:'<div class="me-arrow"></div><div class="me-text">Tôi</div>',
+  iconSize:[30,30],
+  iconAnchor:[15,15]
+});
+
+/* ================= GPS ================= */
+let myLatLng=null;
+let myMarker=null;
+let activeTarget=null;
+let activeCustomer=null;
+
+navigator.geolocation.watchPosition(p=>{
+  myLatLng=[p.coords.latitude,p.coords.longitude];
+  if(!myMarker){
+    myMarker=L.marker(myLatLng,{icon:meIcon}).addTo(map);
+  }else{
+    myMarker.setLatLng(myLatLng);
+  }
+  if(activeTarget) updateDistance();
+},{enableHighAccuracy:true});
+
+document.getElementById('btnMyPos').onclick=()=>{
+  if(myLatLng) map.setView(myLatLng,18);
+};
+
+/* ================= CLICK MAP ================= */
+let tempLatLng=null;
+map.on('click',e=>{
+  tempLatLng=e.latlng;
+  coord.value=`${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}`;
+});
+
+/* ================= DATA ================= */
+let locations=JSON.parse(localStorage.getItem('locations')||'[]');
+let markers=[];
+
+function save(){
+  localStorage.setItem('locations',JSON.stringify(locations));
+  render();
+}
+
+function saveLocation(){
+  if(!tempLatLng) return alert("Chạm bản đồ để lấy toạ độ");
+  locations.push({
+    id:Date.now(),
+    customer:customer.value,
+    phone:phone.value,
+    lat:tempLatLng.lat,
+    lng:tempLatLng.lng
+  });
+  tempLatLng=null;
+  coord.value='';
+  save();
+}
+
+function render(){
+  markers.forEach(m=>map.removeLayer(m));
+  markers=[];
+
+  list.innerHTML='';
+  locations.forEach((l,i)=>{
+    const m=L.marker([l.lat,l.lng]).addTo(map)
+      .bindTooltip(`${l.customer}<br>${l.phone}`);
+    markers.push(m);
+
+    const d=document.createElement('div');
+    d.className='item';
+    d.innerHTML=`
+      <b>${l.customer}</b><br>${l.phone}
+      <div class="row">
+        <button onclick="goTo(${i})">Đi tới</button>
+        <button onclick="del(${i})">Xoá</button>
+      </div>
+    `;
+    list.appendChild(d);
+  });
+}
+render();
+
+function del(i){
+  locations.splice(i,1);
+  save();
+}
+
+function goTo(i){
+  const l=locations[i];
+  activeTarget=[l.lat,l.lng];
+  activeCustomer=l;
+  drawOSRMRoute(myLatLng,activeTarget);
+  map.setView(activeTarget,17);
+}
+
+/* ================= DISTANCE ================= */
+function updateDistance(){
+  if(!activeTarget||!myLatLng) return;
+  const d=map.distance(myLatLng,activeTarget);
+  distanceBox.innerText=d<1000?`${Math.round(d)} m`:`${(d/1000).toFixed(2)} km`;
+
+  if(d<15){
+    alert(`🎯 Đã đến nơi\n${activeCustomer.customer}\n${activeCustomer.phone}`);
+    activeTarget=null;
+    navBox.style.display='none';
+  }
+}
+</script>
+
+</body>
+</html>
